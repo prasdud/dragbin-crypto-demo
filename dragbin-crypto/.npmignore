@@ -1,0 +1,24 @@
+# Source files (only ship dist/)
+src/
+test/
+scripts/
+
+# Config files
+tsconfig.json
+rollup.config.js
+vitest.config.ts
+.gitignore
+
+# Development
+node_modules/
+coverage/
+*.log
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
