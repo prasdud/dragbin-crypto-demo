@@ -169,6 +169,7 @@ export default function QuantumDemo() {
                     </div>
 
                     {/* Slider Section */}
+                    {/* Slider Section */}
                     <div className="mb-12 bg-card/30 border border-secondary/20 p-8 rounded-xl cyber-chamfer relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Cpu className="w-32 h-32" />
@@ -180,12 +181,18 @@ export default function QuantumDemo() {
                         </h3>
 
                         <Slider
-                            defaultValue={[5000]}
-                            value={qubits}
-                            onValueChange={setQubits}
-                            max={30_000_000_000} // 30 Billion
-                            min={100}
-                            step={1000}
+                            defaultValue={[44.4]} // ~1,000 qubits log scale
+                            value={[(Math.log10(qubits[0]) - 2) / 9 * 100]}
+                            onValueChange={(vals) => {
+                                // Formula: qubits = 10 ^ (2 + (sliderVal / 100) * 9)
+                                // Range: 10^2 (100) to 10^11 (100B)
+                                const sliderVal = vals[0];
+                                const logVal = 2 + (sliderVal / 100) * 9;
+                                setQubits([Math.pow(10, logVal)]);
+                            }}
+                            max={100}
+                            min={0}
+                            step={0.1}
                             className="mb-8 z-10 relative"
                         />
 
@@ -201,15 +208,17 @@ export default function QuantumDemo() {
                                         ? `${(qubits[0] / 1_000_000_000).toFixed(1)}B`
                                         : (qubits[0] > 1_000_000)
                                             ? `${(qubits[0] / 1_000_000).toFixed(1)}M`
-                                            : `${(qubits[0] / 1_000).toFixed(1)}k`
+                                            : (qubits[0] > 1_000)
+                                                ? `${(qubits[0] / 1_000).toFixed(1)}k`
+                                                : Math.round(qubits[0])
                                     }
                                 </span>
                                 <span className="block text-xs tracking-widest mt-1">Simulated Qubits</span>
                             </div>
 
                             <div className="text-xs text-muted-foreground text-right">
-                                Est. Year 2050+<br />
-                                <span className="text-foreground font-bold">~1 Billion+</span>
+                                Future Forecast<br />
+                                <span className="text-foreground font-bold">100 Billion+</span>
                             </div>
                         </div>
                     </div>
