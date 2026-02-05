@@ -57,9 +57,9 @@ export default function QuantumDemo() {
                 // Simulate "cracking" delay based on algo?
                 const crack = async () => {
                     if (algo === 'RSA-2048') {
-                        setDecryptedDisplay(decryptRSA(data.ciphertext, data.privateKey));
+                        setDecryptedDisplay(await decryptRSA(data.ciphertext, data.privateKey));
                     } else if (algo === 'ECC-256') {
-                        setDecryptedDisplay(decryptECC(data.ciphertext, data.privateKey));
+                        setDecryptedDisplay(await decryptECC(data.ciphertext, data.privateKey));
                     } else {
                         // Kyber never breaks in this demo
                         setDecryptedDisplay(null);

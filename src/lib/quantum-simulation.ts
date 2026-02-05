@@ -1,8 +1,4 @@
 
-import forge from 'node-forge';
-import { ec as EC } from 'elliptic';
-
-
 // --- THREAT MODEL CONSTANTS ---
 // Based on current research estimates for Shor's Algorithm
 const RSA_2048_QUBITS = 20_000_000_000; // ~20 Billion physical qubits (assuming 1000:1 overhead)
@@ -22,14 +18,16 @@ interface CryptoResult {
 
 // --- RSA IMPLEMENTATION ---
 export async function runRSA(plaintext: string): Promise<CryptoResult> {
+    const forge = (await import('node-forge')).default;
+
     const startKey = performance.now();
     // Use lower bit size for demo speed if needed, but 2048 is requested
     // Generating 2048 in JS can be slow (seconds). We might cache or use 1024 for "Demo Speed" if acceptable?
     // User asked for RSA-2048. Let's try real 2048, if too slow we warn user?
     // forge.pki.rsa.generateKeyPair is sync and can block. 
     // We'll wrap in promise to not freeze UI if possible (async forge generation).
-    const keypair = await new Promise<forge.pki.KeyPair>((resolve, reject) => {
-        forge.pki.rsa.generateKeyPair({ bits: 2048, workers: 2 }, (err, keypair) => {
+    const keypair = await new Promise<any>((resolve, reject) => {
+        forge.pki.rsa.generateKeyPair({ bits: 2048, workers: 2 }, (err: any, keypair: any) => {
             if (err) reject(err);
             else resolve(keypair);
         });
@@ -37,7 +35,7 @@ export async function runRSA(plaintext: string): Promise<CryptoResult> {
     const keyGenTime = performance.now() - startKey;
 
     const startEnc = performance.now();
-    const pubKey = keypair.publicKey as forge.pki.rsa.PublicKey;
+    const pubKey = keypair.publicKey;
     const encrypted = pubKey.encrypt(plaintext, 'RSA-OAEP', {
         md: forge.md.sha256.create()
     });
@@ -52,9 +50,10 @@ export async function runRSA(plaintext: string): Promise<CryptoResult> {
     };
 }
 
-export function decryptRSA(ciphertextB64: string, privateKey: forge.pki.PrivateKey): string {
+export async function decryptRSA(ciphertextB64: string, privateKey: any): Promise<string> {
+    const forge = (await import('node-forge')).default;
     const ciphertext = forge.util.decode64(ciphertextB64);
-    return (privateKey as forge.pki.rsa.PrivateKey).decrypt(ciphertext, 'RSA-OAEP', {
+    return privateKey.decrypt(ciphertext, 'RSA-OAEP', {
         md: forge.md.sha256.create()
     });
 }
@@ -65,6 +64,9 @@ export function decryptRSA(ciphertextB64: string, privateKey: forge.pki.PrivateK
 // 2. ECDH for Shared Secret
 // 3. AES-GCM encryption
 export async function runECC(plaintext: string): Promise<CryptoResult> {
+    const { ec: EC } = await import('elliptic');
+    const forge = (await import('node-forge')).default;
+
     const ec = new EC('p256');
 
     // Static Key (Recipient)
@@ -108,7 +110,10 @@ export async function runECC(plaintext: string): Promise<CryptoResult> {
     };
 }
 
-export function decryptECC(ciphertextB64: string, privateKey: any): string {
+export async function decryptECC(ciphertextB64: string, privateKey: any): Promise<string> {
+    const { ec: EC } = await import('elliptic');
+    const forge = (await import('node-forge')).default;
+
     const packetJson = forge.util.decode64(ciphertextB64);
     const pkt = JSON.parse(packetJson);
 
@@ -135,6 +140,8 @@ export function decryptECC(ciphertextB64: string, privateKey: any): string {
 
 // --- KYBER IMPLEMENTATION ---
 export async function runKyber(plaintext: string): Promise<CryptoResult> {
+    const { generateKeyPair: generateKyberKeyPair, encryptFile: encryptKyber } = await import('@dragbin/crypto');
+
     const startKey = performance.now();
     const { publicKey, privateKey } = await generateKyberKeyPair();
     const keyGenTime = performance.now() - startKey;
@@ -166,51 +173,13 @@ export async function runKyber(plaintext: string): Promise<CryptoResult> {
 
 export async function decryptKyberSim(ciphertextB64: string, privateKey: Uint8Array): Promise<string> {
     try {
+        const { encryptPrivateKey, decryptFile } = await import('@dragbin/crypto');
+
         const binary = atob(ciphertextB64);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
             bytes[i] = binary.charCodeAt(i);
         }
-
-        // decryptFile requires (encryptedData, password?? wait)
-        // Check signature: decryptFile(encryptedData, password, encryptedPrivateKey, salt, iv)
-        // Ah, our wrapper assumes "User Flow" where key is encrypted.
-        // We need a raw "Decrypt with Private Key" function if available?
-        // Let's check src/lib/crypto.ts and @dragbin/crypto definition.
-        // If the library doesn't expose raw decryption, we might need a workaround or modify the wrapper.
-        // Looking at crypto.ts:
-        // export async function decryptFile(encryptedData, password, encryptedPrivateKey, salt, iv)
-        // It seems purely designed for the password-protected flow.
-
-        // HOWEVER, since we're simulating, we can bypass the "Private Key Encryption".
-        // If we implement `unprotectPrivateKey` as identity for this demo?
-        // Or better: does `@dragbin/crypto` expose `decryptFileRaw`?
-        // Let's assume for this specific demo we used `encryptKyber` which calls `encryptFile`.
-        // We probably need to construct a "Fake" password flow if the lib is rigid.
-
-        // Let's protect the private key with a dummy password "demo" on the fly, then call decrypt.
-        // This is a bit inefficient but uses the real library code.
-        const dummyPass = "demo-quantum";
-        // crypto.ts has `protectPrivateKey`
-        // We can't import `protectPrivateKey` here easily if circular? No, crypto.ts uses this lib?
-        // Wait, I am writing THIS file. `src/lib/crypto.ts` is the existing one.
-        // I should stick to using `src/lib/crypto.ts` or `@dragbin/crypto` directly.
-        // The import above is from `@dragbin/crypto`.
-
-        // Let's look at `node_modules/@dragbin/crypto` or assume standard export.
-        // If `decryptFile` in lib takes (data, privateKey), that's great.
-        // If it takes (data, password, encKey...), that's the high level wrapper.
-
-        // Let's assume for a moment we can use the high level `decryptUserFile` which I defined in `demo-store` logic but it resides in `crypto.ts`.
-        // Actually, let's use the local `src/lib/crypto.ts` exports which are typed and known.
-
-        // We need `decryptDragbinFile` imported from `crypto.ts`? 
-        // No, `crypto.ts` imports `decryptFile as decryptDragbinFile` from `@dragbin/crypto`.
-
-        // Let's assume we have to use the password flow.
-        // Quick Fix:
-        // We will implement `decrypt` by "protecting" our raw private key instantly and then decrypting.
-        const { encryptPrivateKey, decryptFile } = await import('@dragbin/crypto');
 
         const { encryptedPrivateKey, salt, iv } = await encryptPrivateKey(privateKey, "qvsession");
         const decrypted = await decryptFile(bytes, "qvsession", encryptedPrivateKey, salt, iv);
