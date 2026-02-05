@@ -1,12 +1,3 @@
-import {
-    generateKeyPair as generateKyberKeyPair,
-    encryptFile,
-    decryptFile as decryptDragbinFile,
-    encryptPrivateKey as encryptDragbinPrivateKey,
-    decryptPrivateKey as decryptDragbinPrivateKey,
-    generateSalt,
-} from '@dragbin/crypto';
-
 // Types
 export interface EncryptedFileMetadata {
     header: {
@@ -36,6 +27,7 @@ export async function encryptUserFile(file: File, publicKey: Uint8Array): Promis
     encryptedData: Uint8Array;
     encryptionTime: number;
 }> {
+    const { encryptFile } = await import('@dragbin/crypto');
     const start = performance.now();
     const data = await fileToUint8Array(file);
     const { encryptedData } = await encryptFile(data, publicKey);
@@ -51,6 +43,7 @@ export async function decryptUserFile(
     salt: Uint8Array,
     iv: Uint8Array,
 ): Promise<{ decryptedData: Uint8Array; decryptionTime: number }> {
+    const { decryptFile: decryptDragbinFile } = await import('@dragbin/crypto');
     const start = performance.now();
     const decryptedData = await decryptDragbinFile(
         encryptedData,
@@ -69,6 +62,7 @@ export async function generateKeys(): Promise<{
     privateKey: Uint8Array;
     generationTime: number;
 }> {
+    const { generateKeyPair: generateKyberKeyPair } = await import('@dragbin/crypto');
     const start = performance.now();
     const { publicKey, privateKey } = await generateKyberKeyPair();
     const generationTime = performance.now() - start;
@@ -80,6 +74,7 @@ export async function protectPrivateKey(
     privateKey: Uint8Array,
     password: string,
 ): Promise<{ encryptedPrivateKey: Uint8Array; salt: Uint8Array; iv: Uint8Array }> {
+    const { encryptPrivateKey: encryptDragbinPrivateKey } = await import('@dragbin/crypto');
     return encryptDragbinPrivateKey(privateKey, password);
 }
 
@@ -90,6 +85,7 @@ export async function unprotectPrivateKey(
     salt: Uint8Array,
     iv: Uint8Array,
 ): Promise<Uint8Array> {
+    const { decryptPrivateKey: decryptDragbinPrivateKey } = await import('@dragbin/crypto');
     return decryptDragbinPrivateKey(encryptedPrivateKey, password, salt, iv);
 }
 
