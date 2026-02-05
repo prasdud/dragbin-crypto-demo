@@ -1,170 +1,224 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { ServerView } from '@/components/ServerView';
-import { ArrowLeft, Cpu, ShieldAlert, ShieldCheck, Hourglass, Zap } from 'lucide-react';
+import { ArrowLeft, Cpu, ShieldAlert, ShieldCheck, Zap, Lock, Unlock, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
+import { runRSA, runECC, runKyber, decryptRSA, decryptECC, decryptKyberSim, getThreatStatus, AlgoType } from '@/lib/quantum-simulation';
 
 export default function QuantumDemo() {
-    const [qubits, setQubits] = useState([5000000]); // 5 million qubits default
-    const [isSimulating, setIsSimulating] = useState(false);
-    const [simulationComplete, setSimulationComplete] = useState(false);
+    const [qubits, setQubits] = useState([5000]); // Start with low qubits
+    const [userText, setUserText] = useState("Top Secret Nuclear Codes");
 
-    // Constants (Simulated values based on research papers)
-    const RSA_BREAK_QUBITS = 20000000; // ~20M noisy qubits for RSA-2048
-    const ECC_BREAK_QUBITS = 10000000; // ~10M noisy qubits for ECC-256
+    // State for the 3 algorithms
+    const [rsaState, setRsaState] = useState<any>(null);
+    const [eccState, setEccState] = useState<any>(null);
+    const [kyberState, setKyberState] = useState<any>(null);
 
-    // Calculate break times based on qubits
-    const getBreakTime = (algo: 'RSA' | 'ECC' | 'AES' | 'Kyber') => {
-        const q = qubits[0];
+    const [isProcessing, setIsProcessing] = useState(false);
 
-        if (algo === 'RSA') {
-            if (q < RSA_BREAK_QUBITS / 100) return "> 1 Trillion Years";
-            if (q < RSA_BREAK_QUBITS / 10) return "1,000 Years";
-            if (q < RSA_BREAK_QUBITS) return "10 Years";
-            return "8 Hours";
-        }
-        if (algo === 'ECC') {
-            if (q < ECC_BREAK_QUBITS / 100) return "> 1 Trillion Years";
-            if (q < ECC_BREAK_QUBITS / 10) return "500 Years";
-            if (q < ECC_BREAK_QUBITS) return "5 Years";
-            return "4 Hours";
-        }
-        if (algo === 'AES') {
-            // Grover's algo: AES-256 -> 128 bit security. Still safe.
-            return "> 1 Trillion Years";
-        }
-        if (algo === 'Kyber') {
-            // Post-quantum secure
-            return "∞ (Secure)";
-        }
-        return "Unknown";
+    // Initial Encryption
+    useEffect(() => {
+        handleRunSimulation();
+    }, []); // Run once on mount
+
+    const handleRunSimulation = async () => {
+        setIsProcessing(true);
+
+        // small delay for UI
+        await new Promise(r => setTimeout(r, 100));
+
+        const [rsa, ecc, kyber] = await Promise.all([
+            runRSA(userText),
+            runECC(userText),
+            runKyber(userText)
+        ]);
+
+        setRsaState(rsa);
+        setEccState(ecc);
+        setKyberState(kyber);
+
+        setIsProcessing(false);
     };
 
-    const isBroken = (algo: 'RSA' | 'ECC') => {
-        const time = getBreakTime(algo);
-        return time.includes("Hours") || time.includes("Years") && !time.includes("Trillion");
-    };
+    const AlgoCard = ({ algo, data }: { algo: AlgoType, data: any }) => {
+        const { isBroken, timeToBreak, statusColor } = getThreatStatus(qubits[0], algo);
+        const [decryptedDisplay, setDecryptedDisplay] = useState<string | null>(null);
 
-    const handleSimulate = () => {
-        setIsSimulating(true);
-        setSimulationComplete(false);
-        setTimeout(() => {
-            setIsSimulating(false);
-            setSimulationComplete(true);
-        }, 2000);
+        // Effect: If broken, actually decrypt!
+        useEffect(() => {
+            if (isBroken && data && !decryptedDisplay) {
+                // Simulate "cracking" delay based on algo?
+                const crack = async () => {
+                    if (algo === 'RSA-2048') {
+                        setDecryptedDisplay(decryptRSA(data.ciphertext, data.privateKey));
+                    } else if (algo === 'ECC-256') {
+                        setDecryptedDisplay(decryptECC(data.ciphertext, data.privateKey));
+                    } else {
+                        // Kyber never breaks in this demo
+                        setDecryptedDisplay(null);
+                    }
+                };
+                crack();
+            } else if (!isBroken) {
+                setDecryptedDisplay(null);
+            }
+        }, [isBroken, data, algo]);
+
+        return (
+            <Card className={`relative overflow-hidden transition-all duration-500 h-full flex flex-col ${isBroken ? 'border-destructive/50 bg-destructive/5' : 'border-primary/20 bg-card/50'}`}>
+                <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle className="text-lg font-bold uppercase tracking-wider flex items-center gap-2">
+                                {algo}
+                            </CardTitle>
+                            <CardDescription className="font-mono text-[10px] mt-1">
+                                {algo === 'Kyber-1024' ? 'LATTICE-BASED KEM' : 'LEGACY PUBLIC KEY'}
+                            </CardDescription>
+                        </div>
+                        {isBroken ? (
+                            <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
+                        ) : (
+                            <ShieldCheck className="w-6 h-6 text-primary neon-glow" />
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col gap-4 font-mono text-xs">
+                    {/* Performance Metrics */}
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground opacity-70">
+                        <div>KeyGen: {data?.keyGenTime.toFixed(1)}ms</div>
+                        <div>Encrypt: {data?.encryptionTime.toFixed(1)}ms</div>
+                    </div>
+
+                    {/* Ciphertext / Plaintext Display */}
+                    <div className="flex-1 bg-background/50 p-3 rounded border border-border overflow-hidden relative group">
+                        <div className="absolute top-1 right-2 text-[8px] uppercase text-muted-foreground">
+                            {isBroken ? "DECRYPTED (CRACKED)" : "ENCRYPTED (SECURE)"}
+                        </div>
+
+                        <div className="break-all leading-relaxed max-h-[100px] overflow-y-auto custom-scrollbar">
+                            {isBroken && decryptedDisplay ? (
+                                <span className="text-destructive font-bold animate-glitch">{decryptedDisplay}</span>
+                            ) : (
+                                <span className="text-muted-foreground blur-[0.5px] opacity-80">
+                                    {data?.ciphertext.substring(0, 150)}...
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Status Bar */}
+                    <div className="mt-auto pt-4 border-t border-border">
+                        <div className="flex justify-between items-end">
+                            <span className="text-[10px] uppercase text-muted-foreground">Est. Time to Break</span>
+                            <span className={`text-sm font-bold ${statusColor}`}>{timeToBreak}</span>
+                        </div>
+                    </div>
+                </CardContent>
+
+                {isBroken && <div className="absolute inset-0 bg-destructive/5 pointer-events-none scanlines mix-blend-overlay" />}
+            </Card>
+        );
     };
 
     return (
         <div className="min-h-screen bg-background text-foreground relative flex flex-col">
-            {/* Nav */}
             <div className="p-4 border-b border-border flex items-center bg-background/80 backdrop-blur z-20">
                 <Link href="/">
                     <Button variant="ghost" size="sm" className="gap-2">
                         <ArrowLeft className="w-4 h-4" /> Back
                     </Button>
                 </Link>
-                <span className="ml-4 font-mono text-sm text-muted-foreground uppercase">/ Demos / Quantum Threat Simulator</span>
+                <span className="ml-4 font-mono text-sm text-muted-foreground uppercase">/ Demos / Quantum Simulator (Real-Time)</span>
             </div>
 
             <div className="flex-1 flex overflow-hidden lg:pr-[350px]">
-                <div className="container mx-auto p-8 max-w-6xl">
-                    <header className="mb-10 text-center">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 text-accent mb-4 neon-glow" style={{ color: 'var(--accent)' }}>
-                            <Cpu className="w-8 h-8 animate-pulse" />
-                        </div>
-                        <h1 className="text-4xl font-black uppercase tracking-widest text-accent neon-text-shadow" style={{ color: 'var(--accent)' }}>Quantum Apocalypse</h1>
-                        <p className="text-muted-foreground mt-4 font-mono max-w-2xl mx-auto">
-                            Simulate how future quantum computers will break today's standard encryption.
-                            <br /><span className="text-xs opacity-70">(Based on Shor's Algorithm running on fault-tolerant qubits)</span>
-                        </p>
-                    </header>
+                <div className="container mx-auto p-4 lg:p-8 max-w-7xl overflow-y-auto h-full pb-20">
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Controls */}
-                        <div className="lg:col-span-3 bg-card/30 border border-border p-8 rounded-xl cyber-chamfer">
-                            <h3 className="font-bold uppercase mb-6 flex items-center gap-2">
-                                <Zap className="w-5 h-5 text-yellow-400" /> Quantum Power (Noisy Qubits)
-                            </h3>
-                            <Slider
-                                defaultValue={[5000000]}
-                                max={50000000}
-                                min={100}
-                                step={100000}
-                                value={qubits}
-                                onValueChange={setQubits}
-                                className="mb-8"
-                            />
-                            <div className="flex justify-between font-mono text-xs text-muted-foreground uppercase">
-                                <span>Today (100+)</span>
-                                <span className={qubits[0] > 10000000 ? "text-primary font-bold" : ""}>Future (10M+)</span>
-                                <span className={qubits[0] > 40000000 ? "text-destructive font-bold" : ""}>Far Future (50M+)</span>
-                            </div>
-                            <div className="text-center mt-4">
-                                <span className="text-4xl font-black font-sans text-foreground">
-                                    {(qubits[0] / 1000000).toFixed(1)} Million
-                                </span>
-                                <span className="text-sm text-muted-foreground ml-2 uppercase font-mono">Qubits</span>
-                            </div>
+                    {/* Header Section */}
+                    <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
+                        <div className="flex-1">
+                            <h1 className="text-3xl font-black uppercase tracking-widest text-accent neon-text-shadow mb-2">Quantum Apocalypse</h1>
+                            <p className="text-sm text-muted-foreground max-w-2xl">
+                                Simulating Shor's Algorithm against real encryption.
+                                We generate actual RSA/ECC/Kyber keys in your browser and verify if they hold up against projected quantum power.
+                            </p>
                         </div>
 
-                        {/* Algorithm Cards */}
-                        {[
-                            { name: 'RSA-2048', type: 'Legacy', desc: 'Standard Web Encryption', time: getBreakTime('RSA') },
-                            { name: 'ECC-256', type: 'Legacy', desc: 'Bitcoin / Mobile Security', time: getBreakTime('ECC') },
-                            { name: 'Kyber-1024', type: 'Next-Gen', desc: 'Dragbin / Post-Quantum', time: getBreakTime('Kyber') }
-                        ].map((algo) => {
-                            const isBrokenNow = (algo.time.includes("Hours") || (algo.time.includes("Years") && !algo.time.includes("Trillion")));
-                            const isSecure = algo.time.includes("Secure") || algo.time.includes("Trillion");
-
-                            return (
-                                <Card key={algo.name} className={`relative overflow-hidden transition-all duration-500 ${isBrokenNow ? 'border-destructive/50 bg-destructive/5' : isSecure ? 'border-primary/50 bg-primary/5' : ''}`}>
-                                    <CardContent className="p-6 flex flex-col items-center text-center h-full justify-between">
-                                        <div>
-                                            <div className="flex justify-center mb-4">
-                                                {isSecure ? (
-                                                    <ShieldCheck className="w-12 h-12 text-primary neon-glow" />
-                                                ) : (
-                                                    <ShieldAlert className={`w-12 h-12 ${isBrokenNow ? 'text-destructive animate-pulse' : 'text-yellow-500'}`} />
-                                                )}
-                                            </div>
-                                            <h3 className="text-2xl font-bold uppercase tracking-wider mb-1">{algo.name}</h3>
-                                            <Badge variant="outline" className="mb-4 text-[10px]">{algo.type}</Badge>
-                                            <p className="text-xs text-muted-foreground font-mono mb-6">{algo.desc}</p>
-                                        </div>
-
-                                        <div className="w-full bg-background/50 p-4 rounded border border-border">
-                                            <div className="text-[10px] uppercase text-muted-foreground mb-1">Time to Break</div>
-                                            <div className={`text-xl font-bold font-mono ${isBrokenNow ? 'text-destructive' : isSecure ? 'text-primary' : 'text-foreground'}`}>
-                                                {algo.time}
-                                            </div>
-                                        </div>
-                                    </CardContent>
-
-                                    {/* Overlay Effect for Broken */}
-                                    {isBrokenNow && (
-                                        <div className="absolute inset-0 bg-destructive/10 pointer-events-none scanlines" />
-                                    )}
-                                </Card>
-                            );
-                        })}
+                        {/* Input Control */}
+                        <div className="w-full md:w-auto bg-card p-4 rounded-xl border border-border cyber-chamfer min-w-[300px]">
+                            <h3 className="text-xs font-bold uppercase text-muted-foreground mb-2">Target Data</h3>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={userText}
+                                    onChange={(e) => setUserText(e.target.value)}
+                                    className="h-9 text-xs font-mono"
+                                />
+                                <Button size="sm" onClick={handleRunSimulation} disabled={isProcessing}>
+                                    {isProcessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Info Section */}
-                    <div className="mt-12 text-center max-w-3xl mx-auto space-y-4">
-                        <h2 className="text-xl font-bold uppercase">The Math Behind the Panic</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Shor's Algorithm allows quantum computers to factor large prime numbers exponentially faster than classical computers.
-                            This breaks RSA and ECC, the foundation of the current internet.
-                        </p>
-                        <p className="text-sm text-primary">
-                            Kyber (Lattice-based cryptography) relies on math problems that are hard even for quantum computers.
-                        </p>
+                    {/* Slider Section */}
+                    <div className="mb-12 bg-card/30 border border-secondary/20 p-8 rounded-xl cyber-chamfer relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Cpu className="w-32 h-32" />
+                        </div>
+
+                        <h3 className="font-bold uppercase text-secondary mb-8 flex items-center gap-2">
+                            <Zap className="w-5 h-5 text-yellow-400" />
+                            Quantum Computer Power (Physical Qubits)
+                        </h3>
+
+                        <Slider
+                            defaultValue={[5000]}
+                            value={qubits}
+                            onValueChange={setQubits}
+                            max={30_000_000_000} // 30 Billion
+                            min={100}
+                            step={1000}
+                            className="mb-8 z-10 relative"
+                        />
+
+                        <div className="flex justify-between items-end font-mono uppercase z-10 relative">
+                            <div className="text-xs text-muted-foreground">
+                                Today (Google/IBM)<br />
+                                <span className="text-foreground font-bold">~1,000 Qubits</span>
+                            </div>
+
+                            <div className="text-center">
+                                <span className="text-5xl font-black text-secondary neon-text-shadow-secondary">
+                                    {(qubits[0] > 1_000_000_000)
+                                        ? `${(qubits[0] / 1_000_000_000).toFixed(1)}B`
+                                        : (qubits[0] > 1_000_000)
+                                            ? `${(qubits[0] / 1_000_000).toFixed(1)}M`
+                                            : `${(qubits[0] / 1_000).toFixed(1)}k`
+                                    }
+                                </span>
+                                <span className="block text-xs tracking-widest mt-1">Simulated Qubits</span>
+                            </div>
+
+                            <div className="text-xs text-muted-foreground text-right">
+                                Est. Year 2050+<br />
+                                <span className="text-foreground font-bold">~1 Billion+</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Algorithm Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[400px]">
+                        {rsaState && <AlgoCard algo="RSA-2048" data={rsaState} />}
+                        {eccState && <AlgoCard algo="ECC-256" data={eccState} />}
+                        {kyberState && <AlgoCard algo="Kyber-1024" data={kyberState} />}
                     </div>
                 </div>
             </div>
@@ -172,4 +226,8 @@ export default function QuantumDemo() {
             <ServerView />
         </div>
     );
+}
+
+function RefreshCw({ className }: { className?: string }) {
+    return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></svg>
 }
