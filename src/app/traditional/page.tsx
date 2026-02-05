@@ -76,9 +76,9 @@ export default function TraditionalDemo() {
                 <span className="ml-4 font-mono text-sm text-muted-foreground uppercase">/ Demos / Traditional vs Dragbin</span>
             </div>
 
-            <div className="flex-1 flex overflow-hidden lg:pr-[350px]">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden lg:pr-[350px]">
                 {/* Left: Traditional */}
-                <div className="flex-1 border-r border-border p-8 bg-background relative flex flex-col">
+                <div className="flex-1 border-b lg:border-b-0 lg:border-r border-border p-8 bg-background relative flex flex-col">
                     <div className="mb-6 text-center">
                         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 mb-4">
                             <Cloud className="w-6 h-6" />
