@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ArrowRight, ShieldCheck, RefreshCw, Cpu, FileSearch } from "lucide-react";
 import { ServerView } from "@/components/ServerView";
+import { SystemBadge } from "@/components/SystemBadge";
 
 export default function Home() {
   return (
@@ -11,9 +12,7 @@ export default function Home() {
 
         {/* Header */}
         <header className="mb-20 text-center relative z-10">
-          <div className="inline-block mb-4 px-4 py-1 border border-primary/30 rounded-full bg-primary/5 text-primary text-xs font-mono tracking-widest uppercase animate-pulse">
-            System Online: Secure
-          </div>
+          <SystemBadge />
           <h1 className="text-5xl md:text-7xl font-sans font-black uppercase tracking-widest mb-6 text-transparent bg-clip-text bg-gradient-to-r from-primary via-white to-secondary animate-rgb-shift text-shadow-neon">
             Dragbin Crypto
           </h1>
